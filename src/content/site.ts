@@ -114,12 +114,8 @@ export const projects: Project[] = [
     },
     description: [
       {
-        en: "Video-MME-Logical isolates reasoning in controlled moving scenes: objects are counted, tracked, hidden, rotated, and transformed over time. The benchmark makes it possible to inspect not only whether a model answers correctly, but which kinds of temporal logic remain difficult.",
-        zh: "Video-MME-Logical 在受控的动态场景中拆解推理能力：物体会随时间被计数、追踪、遮挡、旋转和变换。它不仅关注模型是否答对，也让不同类型的时序逻辑难点变得可检查。",
-      },
-      {
-        en: "The public release includes the paper, dataset, evaluation code, leaderboard, representative tasks, and an agent-oriented reproduction guide.",
-        zh: "公开版本包含论文、数据集、评测代码、排行榜、代表性任务，以及面向 Agent 的复现指南。",
+        en: "Video-MME-Logical tests whether multimodal models can understand **what changes over time in a video**, using controlled tasks such as object counting, tracking, occlusion, rotation, and transformation. It helps researchers **diagnose temporal-reasoning failures** and evaluate models for applications such as video assistants, embodied agents, robotics, and long-video understanding.",
+        zh: "Video-MME-Logical 用于检验多模态模型能否理解**视频中随时间发生的变化**，通过物体计数、追踪、遮挡、旋转与变换等受控任务进行评测。它可帮助研究者**定位时序推理失败**，并评估模型在视频助手、具身智能、机器人与长视频理解等应用中的能力。",
       },
     ],
     tags: ["Benchmark", "Video reasoning", "Multimodal LLM", "Temporal logic"],

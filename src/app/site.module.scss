@@ -362,6 +362,11 @@
   font-size: clamp(1rem, 1.7vw, 1.18rem);
 }
 
+.bodyText strong {
+  color: var(--ink);
+  font-weight: 700;
+}
+
 .mediaGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

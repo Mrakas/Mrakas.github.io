@@ -15,6 +15,16 @@ import { ProjectCard } from "./ProjectCard";
 import { ProjectVideo } from "./ProjectVideo";
 import styles from "@/app/site.module.scss";
 
+function renderEmphasis(text: string) {
+  return text.split(/(\*\*.*?\*\*)/g).map((part, index) =>
+    part.startsWith("**") && part.endsWith("**") ? (
+      <strong key={index}>{part.slice(2, -2)}</strong>
+    ) : (
+      part
+    ),
+  );
+}
+
 export function HomePage({ locale }: { locale: Locale }) {
   const copy = labels[locale];
   const jsonLd = {
@@ -107,7 +117,7 @@ export function ProjectPage({ locale, slug }: { locale: Locale; slug: string }) 
       <section className={styles.section}>
         <div className={styles.prose}>
           {project.description.map((paragraph, index) => (
-            <p className={styles.bodyText} key={index}>{localize(locale, paragraph)}</p>
+            <p className={styles.bodyText} key={index}>{renderEmphasis(localize(locale, paragraph))}</p>
           ))}
           <div className={styles.tagRow}>
             {project.tags.map((tag) => <span className={styles.tag} key={tag}>{tag}</span>)}
