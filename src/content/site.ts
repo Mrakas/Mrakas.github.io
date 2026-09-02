@@ -148,7 +148,7 @@ export const projects: Project[] = [
       {
         type: "video",
         src: "/images/showcase/video-mme/cups.mp4",
-        poster: "/images/showcase/video-mme/screenshot-dark.png",
+        poster: "/images/showcase/video-mme/cups-poster.jpg",
         alt: { en: "Object tracking with cups", zh: "杯子物体追踪任务" },
         caption: { en: "Object tracking with cups", zh: "杯子物体追踪任务" },
       },

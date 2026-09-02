@@ -13,6 +13,7 @@ import {
 } from "@/content/site";
 import { ProjectCard } from "./ProjectCard";
 import { ProjectVideo } from "./ProjectVideo";
+import { CupTrackingQuiz } from "./CupTrackingQuiz";
 import styles from "@/app/site.module.scss";
 
 function renderEmphasis(text: string) {
@@ -136,7 +137,11 @@ export function ProjectPage({ locale, slug }: { locale: Locale; slug: string }) 
         <div className={styles.mediaGrid}>
           {project.media.map((media, index) =>
             media.type === "video" ? (
-              <ProjectVideo key={media.src} media={media} locale={locale} />
+              media.src.endsWith("/cups.mp4") ? (
+                <CupTrackingQuiz key={media.src} media={media} locale={locale} />
+              ) : (
+                <ProjectVideo key={media.src} media={media} locale={locale} />
+              )
             ) : (
               <figure className={styles.mediaCard} key={media.src}>
                 <div className={styles.mediaFrame}>
