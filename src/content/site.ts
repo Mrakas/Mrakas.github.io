@@ -54,7 +54,7 @@ export const labels = {
     selectedWorks: "Selected works",
     hero: "An archive of systems, benchmarks, and visual experiments.",
     subhero:
-      "Two projects exploring how machines understand moving worlds—and how creative systems can make those worlds inspectable.",
+      "Projects exploring how machines understand and generate moving worlds—and how creative systems can make those worlds inspectable.",
     viewProject: "View project",
     allWork: "All work",
     openLink: "Open link",
@@ -81,7 +81,7 @@ export const labels = {
     language: "EN",
     selectedWorks: "精选作品",
     hero: "一个关于系统、基准与视觉实验的档案馆。",
-    subhero: "两个项目，分别探索机器如何理解动态世界，以及创作系统如何让这些世界可检查、可编辑。",
+    subhero: "这些项目探索机器如何理解与生成动态世界，以及创作系统如何让这些世界可检查、可编辑。",
     viewProject: "查看项目",
     allWork: "全部作品",
     openLink: "打开链接",
@@ -238,6 +238,57 @@ export const projects: Project[] = [
       },
     ],
   },
+  {
+    slug: "video-gen-roadmap",
+    year: "2026",
+    title: "Video Gen Roadmap",
+    kicker: {
+      en: "Explainer · Video generation",
+      zh: "讲解视频 · 视频生成",
+    },
+    summary: {
+      en: "A narrated explainer on how video generation evolved, from GANs to diffusion transformers and interactive world models.",
+      zh: "一支配音讲解视频，梳理视频生成从 GAN 到 Diffusion Transformer 与可交互世界模型的技术路线。",
+    },
+    description: [
+      {
+        en: "The video walks through five stages: **GANs**, **autoregressive token models**, **diffusion U-Nets**, **Sora-style diffusion transformers**, and the current frontier of **joint audio-video generation, real-time streaming, and interactive world models**.",
+        zh: "视频按五个阶段展开：**GAN**、**自回归 token 模型**、**扩散 U-Net**、**Sora 式 Diffusion Transformer**，以及当前前沿的**音画同生、实时流式生成与可交互世界模型**。",
+      },
+      {
+        en: "It closes by tracing three threads that run through the whole history: how video is represented (pixels → discrete tokens → compressed spacetime latents), how it is generated (adversarial → autoregressive → diffusion and flow matching → autoregressive-diffusion hybrids), and which backbone does the work (CNN → U-Net → DiT).",
+        zh: "结尾用三条主线串起整段历史：视频如何表示（像素 → 离散 token → 压缩时空潜空间）、如何生成（对抗 → 自回归 → 扩散与 Flow Matching → 自回归与扩散融合），以及由什么骨干网络完成（CNN → U-Net → DiT）。",
+      },
+    ],
+    tags: ["Explainer", "Video generation", "Diffusion", "World models"],
+    cover: "/images/showcase/video-gen-roadmap/cover.jpg",
+    coverAlt: {
+      en: "Video generation roadmap title card",
+      zh: "视频生成技术路线标题画面",
+    },
+    media: [
+      {
+        type: "video",
+        src: "/images/showcase/video-gen-roadmap/roadmap.mp4",
+        poster: "/images/showcase/video-gen-roadmap/cover.jpg",
+        alt: { en: "Video generation roadmap explainer", zh: "视频生成技术路线讲解视频" },
+        caption: { en: "Video generation roadmap · Mandarin narration with subtitles", zh: "视频生成技术路线 · 中文配音与字幕" },
+      },
+      {
+        type: "image",
+        src: "/images/showcase/video-gen-roadmap/dit.jpg",
+        alt: { en: "Sora-style DiT pipeline", zh: "Sora 式 DiT 流程" },
+        caption: { en: "The Sora recipe: 3D VAE → spacetime patches → diffusion transformer", zh: "Sora 配方：3D VAE → 时空 patch → Diffusion Transformer" },
+      },
+      {
+        type: "image",
+        src: "/images/showcase/video-gen-roadmap/recap.jpg",
+        alt: { en: "Three threads recap", zh: "三条主线总结" },
+        caption: { en: "Representation, paradigm, backbone—and the goal", zh: "表示、范式、骨干，以及目标" },
+      },
+    ],
+    links: [],
+  },
 ];
 
 export const notes: Note[] = [
@@ -362,6 +413,11 @@ export const galleryItems = [
     src: "/images/showcase/storycanvas/architecture.svg",
     projectSlug: "storycanvas",
     alt: { en: "StoryCanvas architecture", zh: "StoryCanvas 架构" },
+  },
+  {
+    src: "/images/showcase/video-gen-roadmap/dit.jpg",
+    projectSlug: "video-gen-roadmap",
+    alt: { en: "Sora-style DiT pipeline", zh: "Sora 式 DiT 流程" },
   },
   {
     src: "/images/showcase/video-mme/title-icon.png",
