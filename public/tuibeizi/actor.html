@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>推杯子 浏览器测试员</title>
+<style>body{margin:0;background:#111;color:#eee;font:14px/1.4 system-ui,sans-serif}#bar{display:flex;gap:8px;flex-wrap:wrap;padding:8px}#bar button{font:inherit;padding:6px 10px}#out{white-space:pre-wrap;padding:8px;margin:0;font:12px/1.35 ui-monospace,monospace}</style>
+</head><body>
+<!-- Test page for tools/browser-actor.js: loads the game (index.html, same folder) in a phone-size frame. -->
+<div id="bar">
+  <button id="m1" type="button">390×844</button><button id="m2" type="button">360×740</button><button id="m3" type="button">375×553</button><button id="m4" type="button">430×932</button>
+  <button id="lay" type="button">排版检查</button><button id="run" type="button">全部跑一遍</button><button id="l1" type="button">只玩第 1 关</button>
+</div>
+<pre id="out">ready</pre>
+<div id="actorStage"></div>
+<script src="browser-actor.js"></script>
+<script>
+const out = document.getElementById('out'), A = window.__actor; A.src = 'index.html';
+const say = v => { out.textContent = typeof v === 'string' ? v : JSON.stringify(v, null, 1); };
+[[1, 390, 844], [2, 360, 740], [3, 375, 553], [4, 430, 932]].forEach(([i, w, h]) => document.getElementById('m' + i).onclick = async () => { say('mounting…'); await A.mount(w, h); say(`mounted ${w}x${h}`); });
+document.getElementById('lay').onclick = () => say(A.layout('now'));
+document.getElementById('l1').onclick = async () => { say('playing level 1…'); try { say(await A.play(0)); } catch (e) { say('ERROR ' + e.stack); } };
+document.getElementById('run').onclick = async () => { say('running all sizes × all levels… (a few minutes)'); const t0 = Date.now(); try { const r = await A.runAll(); say(Object.assign({ seconds: Math.round((Date.now() - t0) / 1000) }, { report: r })); } catch (e) { say('ERROR ' + e.stack); } };
+if (location.hash === '#run') document.getElementById('run').click();
+</script>
+</body></html>

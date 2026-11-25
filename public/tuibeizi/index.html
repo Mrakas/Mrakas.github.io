@@ -1,0 +1,953 @@
+<title>推杯子</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&display=swap">
+<style>
+/* Layout: one-screen portrait game. HUD strip, pixel canvas that fills the middle, three hold-buttons at the thumb line. */
+:root{
+  --bg:#2b2030; --panel:#3b2c42; --panel2:#56405f; --ink:#fbeedd; --muted:#cbb6c6;
+  --accent:#f2a541; --accentD:#b8692a; --danger:#e8574f; --ok:#8fd17f; --line:#1a1119;
+  --font:"ZCOOL KuaiLe","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",sans-serif;
+  color-scheme:dark;
+}
+html{height:100%;box-sizing:border-box;background:var(--bg)}
+*,*::before,*::after{box-sizing:inherit}
+body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:15px;overflow:hidden;
+  touch-action:manipulation;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none}
+#app{height:100%;max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:10px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:10px 12px}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
+
+/* HUD */
+#hud{flex:none;display:grid;grid-template-columns:1fr auto auto;gap:6px 10px;align-items:center}
+#hud[data-off] .live{visibility:hidden}
+#lvName{font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+#timer{font-size:17px;font-variant-numeric:tabular-nums;color:var(--accent)}
+.chip{position:relative;min-height:36px;min-width:44px;background:var(--panel);border:0;padding:4px 10px;font-size:13px;box-shadow:0 0 0 2px var(--line);color:var(--muted)}
+.chip::after{content:'';position:absolute;inset:-4px 0}
+.chip:active{transform:translateY(1px)}
+#row2{grid-column:1/-1;display:flex;gap:12px;align-items:center;font-size:14px;color:var(--muted)}
+#left{white-space:nowrap;font-variant-numeric:tabular-nums}
+.meter{flex:1;display:flex;align-items:center;gap:6px;min-width:0}
+.bar{flex:1;height:10px;background:var(--line);box-shadow:0 0 0 2px var(--line);position:relative;overflow:hidden}
+.bar i{position:absolute;inset:0 auto 0 0;width:0;background:var(--accent);transition:width .1s linear}
+.bar i.hot{background:var(--danger)}
+
+/* Stage */
+#stage{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center}
+#screen{position:relative;box-shadow:0 0 0 3px var(--line),0 0 0 6px var(--panel2)}
+canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges}
+#hint{position:absolute;left:50%;top:10px;transform:translateX(-50%);pointer-events:none;white-space:nowrap;
+  font-size:17px;padding:4px 12px;background:rgba(26,17,25,.78);color:var(--ink);box-shadow:0 0 0 2px var(--line)}
+#hint.warn{background:var(--accent);color:var(--line)}
+#hint.look{background:var(--danger);color:#fff}
+#hint.calm{background:var(--ok);color:var(--line)}
+.hold.push:not(.ready):not(.active){filter:saturate(.35) brightness(.85)}
+.hold.push.ready{animation:ready .6s steps(2) infinite}
+@keyframes ready{50%{box-shadow:inset -4px -5px 0 var(--accentD),0 0 0 3px var(--line),0 0 0 6px var(--ink)}}
+@media (prefers-reduced-motion:reduce){.hold.push.ready{animation:none;box-shadow:inset -4px -5px 0 var(--accentD),0 0 0 3px var(--line),0 0 0 6px var(--ink)}}
+#ov{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:12px;background:rgba(26,17,25,.5);overflow:auto}
+.card{width:100%;max-width:290px;background:var(--panel);box-shadow:0 0 0 3px var(--line),inset 0 -4px 0 rgba(0,0,0,.25);padding:16px 16px 18px;text-align:center;display:flex;flex-direction:column;gap:10px}
+.card h1{margin:0;font-weight:400;font-size:46px;line-height:1;color:var(--accent);letter-spacing:.06em;
+  text-shadow:3px 3px 0 var(--line),-1px -1px 0 var(--line),1px -1px 0 var(--line),-1px 1px 0 var(--line)}
+.card h2{margin:0;font-weight:400;font-size:24px;line-height:1.15;text-wrap:balance}
+.card p{margin:0;line-height:1.5;color:var(--muted);text-wrap:pretty}
+.card .big{font-size:26px;color:var(--ink);font-variant-numeric:tabular-nums}
+.how{text-align:left;margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px;font-size:14px;line-height:1.45;color:var(--muted)}
+.how li{display:grid;grid-template-columns:22px 1fr;gap:6px}
+.how b{font-weight:400;color:var(--accent)}
+.btns{display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
+.pbtn{border:0;background:var(--accent);color:var(--line);font-size:19px;padding:9px 18px;
+  box-shadow:inset -3px -4px 0 var(--accentD),0 0 0 3px var(--line)}
+.pbtn.alt{background:var(--panel2);color:var(--ink);box-shadow:inset -3px -4px 0 rgba(0,0,0,.3),0 0 0 3px var(--line)}
+.pbtn:active{transform:translateY(2px);box-shadow:inset -2px -2px 0 var(--accentD),0 0 0 3px var(--line)}
+.lvls{display:flex;gap:8px;justify-content:center}
+.lvls button{flex:0 1 44px;min-width:0;height:48px;border:0;background:var(--panel2);color:var(--ink);font-size:18px;box-shadow:0 0 0 2px var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1;padding:0}
+.lvls button small{font-size:10px;letter-spacing:-.05em;color:var(--accent)}
+.lvls button.cur small{color:var(--line)}
+.stars{font-size:30px;line-height:1;color:var(--accent);letter-spacing:.1em;text-shadow:2px 2px 0 var(--line)}
+.lvls button.cur{background:var(--accent);color:var(--line)}
+.lvls button:disabled{opacity:.4;cursor:default}
+.tag{font-size:13px;color:var(--muted)}
+
+/* Controls */
+#controls{flex:none;height:84px;display:grid;grid-template-columns:1fr 1fr 1.35fr;gap:12px;touch-action:none}
+.hold{border:0;background:var(--panel);color:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  box-shadow:inset -4px -5px 0 rgba(0,0,0,.28),0 0 0 3px var(--line);touch-action:none}
+.hold svg{width:28px;height:28px}
+.hold.push{background:var(--accent);color:var(--line);box-shadow:inset -4px -5px 0 var(--accentD),0 0 0 3px var(--line)}
+.hold.push span{font-size:30px;line-height:1}
+.hold small{font-size:12px;opacity:.8}
+.hold.on{transform:translateY(3px);box-shadow:inset -2px -2px 0 rgba(0,0,0,.28),0 0 0 3px var(--line)}
+.hold.push.on{box-shadow:inset -2px -2px 0 var(--accentD),0 0 0 3px var(--line)}
+#controls[data-off] .hold{opacity:.45}
+@media (max-height:600px){#controls{height:68px}.card{padding:12px 14px 14px;gap:8px}.card h1{font-size:34px}.how{font-size:13px;gap:4px}}
+</style>
+
+<div id="app">
+  <header id="hud" data-off>
+    <div id="lvName" class="live">第 1 关 · 早饭</div>
+    <div id="timer" class="live">60 秒</div>
+    <div style="display:flex;gap:8px">
+      <button id="btnSound" class="chip" type="button">声音 关</button>
+      <button id="btnPause" class="chip live" type="button">暂停</button>
+    </div>
+    <div id="row2" class="live">
+      <span id="left">还剩 3 件</span>
+      <span class="meter"><span>怀疑</span><span class="bar"><i id="susp"></i></span></span>
+    </div>
+  </header>
+
+  <div id="stage">
+    <div id="screen">
+      <canvas id="cv" width="320" height="440" aria-label="游戏画面"></canvas>
+      <div id="hint" role="status" aria-live="polite" hidden></div>
+      <div id="ov">
+        <div class="card" id="scrTitle">
+          <h1>推杯子</h1>
+          <p>趁主人背对着你，把桌上的东西全推下去。</p>
+          <ul class="how">
+            <li><b>1</b><span>按住 <b>◀ ▶</b> 走到东西旁边。</span></li>
+            <li><b>2</b><span>按住 <b>推</b>，把它一点点推下桌。</span></li>
+            <li><b>3</b><span>主人头上冒出 <b>?</b> 就马上松手，乖乖坐好。</span></li>
+            <li><b>4</b><span>被看到在推、东西还在掉，或「怀疑」满了，就输了。</span></li>
+          </ul>
+          <div class="btns"><button class="pbtn" id="btnPlay" type="button">开始</button></div>
+          <div class="lvls" id="lvls"></div>
+        </div>
+
+        <div class="card" id="scrIntro" hidden>
+          <div class="tag" id="inNum">第 1 关</div>
+          <h2 id="inName">早饭</h2>
+          <p id="inItems"></p>
+          <p id="inTip"></p>
+          <div class="btns"><button class="pbtn" id="btnGo" type="button">开推</button></div>
+        </div>
+
+        <div class="card" id="scrPause" hidden>
+          <h2>暂停中</h2>
+          <p>主人什么也没发现。</p>
+          <div class="btns">
+            <button class="pbtn" id="btnResume" type="button">继续</button>
+            <button class="pbtn alt" id="btnRestartP" type="button">重来</button>
+            <button class="pbtn alt" id="btnHomeP" type="button">标题</button>
+          </div>
+        </div>
+
+        <div class="card" id="scrWin" hidden>
+          <div class="tag" id="wNum">第 1 关</div>
+          <h2 id="wTitle">全部推下去了！</h2>
+          <div class="big" id="wTime">12.3 秒</div>
+          <div class="stars" id="wStars" aria-label="">★★★</div>
+          <p id="wBest"></p>
+          <div class="btns">
+            <button class="pbtn" id="btnNext" type="button">下一关</button>
+            <button class="pbtn alt" id="btnAgainW" type="button">再玩一次</button>
+            <button class="pbtn alt" id="btnHomeW" type="button">标题</button>
+          </div>
+        </div>
+
+        <div class="card" id="scrLose" hidden>
+          <h2 id="lTitle">被抓个正着！</h2>
+          <p id="lWhy"></p>
+          <div class="btns">
+            <button class="pbtn" id="btnAgainL" type="button">再来一次</button>
+            <button class="pbtn alt" id="btnHomeL" type="button">标题</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="controls" data-off>
+    <button class="hold" id="kL" type="button" aria-label="向左走">
+      <svg viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M5 0h2v8h-2zM3 1h2v6h-2zM1 3h2v2h-2zM2 2h1v4h-1z"/></svg>
+      <small>按住走</small>
+    </button>
+    <button class="hold" id="kR" type="button" aria-label="向右走">
+      <svg viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M1 0h2v8h-2zM3 1h2v6h-2zM5 3h2v2h-2zM5 2h1v4h-1z"/></svg>
+      <small>按住走</small>
+    </button>
+    <button class="hold push" id="kP" type="button" aria-label="推">
+      <span>推</span><small>按住</small>
+    </button>
+  </div>
+</div>
+
+<script>
+(function(){
+'use strict';
+/* ---------- constants ---------- */
+const W=160, H=220;
+const REST=139, EDGE=154, CATY=143, FLOOR_Y=210;
+const CAT_SPEED=50, GRAV=620, SUSP_WALK=55, SUSP_DECAY=6;
+const GAP_MIN=-3, GAP_MAX=4, CAT_FRONT=12; // pushable when the item's near edge is this far past the cat's nose
+const CAT_HEAD_X={sit:3,walk:3,push:3,swat:3,caught:3}; // one head anchor for every pose, so switching poses never shifts the cat
+const HALF={cup:5,phone:4,vase:5,plant:6,clock:6};
+const TOP={cup:9,phone:11,vase:23,plant:20,clock:14}; // sprite height above its base
+const REDUCED = (()=>{try{return matchMedia('(prefers-reduced-motion: reduce)').matches}catch(e){return false}})();
+
+const C={
+  K:'#2a1c22', wall:'#d8c3a0', wall2:'#cfb893', base:'#8d6a4e',
+  sky1:'#4f3f7d', sky2:'#a8578a', sky3:'#ee9a5e', sun:'#ffd37a', frame:'#8a5a3c',
+  cab:'#7d9b8a', cab2:'#6c8a7a', cabD:'#4f6b5d', knob:'#e8c46a',
+  tile:'#ece3d0', grout:'#d2c4a9', ctop:'#b98a5e', ctopD:'#9a6f48',
+  floor:'#8a6a50', floorD:'#7a5c44',
+  tTop:'#b0703f', tLine:'#9a5f34', tHi:'#c88a55', tApron:'#7a4526', tLeg:'#6b3b20',
+  floor2:'#5c4658', floor2D:'#4f3c4c',
+  cat:'#f2a541', catD:'#c96f2c', catW:'#fff2dc', pink:'#f29aa8',
+  hair:'#4a2e2a', hair2:'#6b443c', skin:'#f1c39c', skinD:'#d99d76', shirt:'#3f7c99', shirtD:'#2f6079',
+  apron:'#f3ece0', apronD:'#d8cfbf', pants:'#2e3350', shoe:'#5a3a2a',
+  white:'#fbf6ee', red:'#d9453b', blue:'#4f86c6', blueL:'#cfe3f5', green:'#5f9e4a', green2:'#7dbb5e',
+  terra:'#c8643b', terraL:'#df7f52', dirt:'#5a3d2b', gold:'#e8b84a', phone:'#323a4c', screen:'#7fd1e8',
+  coffee:'#6b3f26', water:'#9fd4ec', yellow:'#f6d55c', steam:'rgba(255,255,255,.55)', shadow:'rgba(30,15,25,.28)'
+};
+
+const DANGER={warn:'#f2a541',look:'#e8574f'};
+function buzz(p){ try{ if(navigator.vibrate) navigator.vibrate(p); }catch(e){} }
+const ITEMS={
+  cup:  {name:'杯子', push:1.0, noise:14, sfx:'crash', pop:'啪！',    cols:[C.white,C.red,C.coffee]},
+  phone:{name:'手机', push:0.8, noise:8, sfx:'thud',  pop:'咚',      cols:[C.phone,C.screen]},
+  vase: {name:'花瓶', push:1.8, noise:20, sfx:'crash', pop:'哐当！',  cols:[C.blue,C.blueL,C.pink,C.green]},
+  plant:{name:'盆栽', push:2.4, noise:16, sfx:'thud',  pop:'噗！',    cols:[C.terra,C.green,C.dirt,C.green2]},
+  clock:{name:'闹钟', push:1.4, noise:24, sfx:'ring',  pop:'叮铃铃！', cols:[C.red,C.gold,C.white]}
+};
+
+const LEVELS=[
+  {name:'早饭', items:['cup','phone','cup'], back:[3.6,5.2], tell:1.2, look:1.8, fake:0,
+   sky:['#8fc8e8','#bfe0ea','#f5e3a8','#fff2b0'], done:'早饭做好了',
+   tip:'主人在做早饭。先熟悉一下：看到「?」就松手。'},
+  {name:'午饭', items:['cup','vase','phone','cup'], back:[3.0,4.6], tell:1.0, look:2.0, fake:0.1,
+   sky:['#5fa8e0','#8cc6ec','#c6e4f0','#fff8d0'], done:'午饭做好了',
+   tip:'花瓶比较重，可以分几次推，推到一半的东西会停在原地。'},
+  {name:'下午茶', items:['plant','cup','vase','phone','cup'], back:[2.4,3.8], tell:0.8, look:2.2, fake:0.2,
+   sky:['#7aa6d6','#e6b88a','#f3cf86','#ffe08a'], done:'茶泡好了',
+   tip:'花瓶、盆栽摔下去动静大，主人很快就会回头。'},
+  {name:'晚饭', items:['vase','clock','cup','plant','phone','cup'], back:[2.2,3.6], tell:0.7, look:2.3, fake:0.3,
+   sky:['#4f3f7d','#a8578a','#ee9a5e','#ffd37a'], done:'晚饭做好了',
+   tip:'主人有时只是动动头，不会真的回头。别上当，也别大意。'},
+  {name:'夜宵', items:['plant','vase','clock','cup','vase','phone','cup'], back:[1.9,3.2], tell:0.65, look:2.4, fake:0.35,
+   sky:['#141a3a','#1f2a52','#2e3a68','#f4f0d8'], done:'夜宵煮好了',
+   tip:'最后一关，主人很警觉。被看到在乱走也会被怀疑。'}
+];
+const TIME=[30,40,40,48,58];
+// star targets [3 stars, 2 stars] in seconds, from the fast-bot average x1.35 / x2 (see CHANGELOG)
+const PAR=[[12,18],[17,26],[23,34],[28,42],[36,53]];
+LEVELS.forEach((L,i)=>{L.time=TIME[i]; L.par=PAR[i];});
+function starsFor(L,sec){ return sec<=L.par[0]?3 : sec<=L.par[1]?2 : 1; }
+const starText=n=>'★'.repeat(n)+'☆'.repeat(3-n);
+
+/* ---------- save ---------- */
+let SAVE={unlocked:1,best:{},stars:{}};
+try{const s=JSON.parse(localStorage.getItem('tuibeizi-v1')||'null'); if(s&&s.unlocked) SAVE=Object.assign(SAVE,s);}catch(e){}
+function persist(){try{localStorage.setItem('tuibeizi-v1',JSON.stringify(SAVE))}catch(e){}}
+
+/* ---------- canvas ---------- */
+const $=id=>document.getElementById(id);
+const cv=$('cv'), ctx=cv.getContext('2d');
+const stage=$('stage'), screenEl=$('screen');
+let K=2;
+function resize(){
+  const r=stage.getBoundingClientRect();
+  const s=Math.max(1,Math.min(r.width/W, r.height/H));
+  const cw=Math.floor(W*s), ch=Math.floor(H*s);
+  screenEl.style.width=cw+'px'; screenEl.style.height=ch+'px';
+  const dpr=Math.min(window.devicePixelRatio||1,3);
+  cv.width=Math.max(W,Math.round(cw*dpr)); cv.height=Math.max(H,Math.round(ch*dpr));
+  cv.style.width=cw+'px'; cv.style.height=ch+'px';
+  K=cv.width/W;
+  ctx.imageSmoothingEnabled=false;
+}
+let OX=0, OY=0; // shake offset (logical px)
+function px(x,y,w,h,c){
+  ctx.fillStyle=c;
+  x+=OX; y+=OY;
+  const x0=Math.round(x*K), y0=Math.round(y*K);
+  ctx.fillRect(x0,y0,Math.round((x+w)*K)-x0,Math.round((y+h)*K)-y0);
+}
+function box(x,y,w,h,c){px(x-1,y-1,w+2,h+2,C.K);px(x,y,w,h,c);}
+const rand=(a,b)=>a+Math.random()*(b-a);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+
+/* pixel glyphs for bubbles */
+const GLYPH={
+ '?':['.###.','#...#','....#','...#.','..#..','.....','..#..'],
+ '!':['..#..','..#..','..#..','..#..','..#..','.....','..#..'],
+ '.':['.....','.....','.....','.....','.....','.....','#.#.#'],
+ 'h':['.....','.#.#.','#####','#####','.###.','..#..','.....']
+};
+function bubble(x,y,ch,col){
+  box(x,y,9,11,C.white);
+  // tail
+  px(x+1,y+11,3,1,C.white); px(x+1,y+12,1,1,C.white);
+  px(x,y+11,1,2,C.K); px(x+4,y+11,1,1,C.K); px(x+2,y+12,2,1,C.K); px(x+1,y+13,1,1,C.K);
+  const g=GLYPH[ch];
+  for(let r=0;r<7;r++)for(let c=0;c<5;c++) if(g[r][c]==='#') px(x+2+c,y+2+r,1,1,col);
+}
+
+/* ---------- room ---------- */
+function drawRoom(t){
+  // wall
+  px(0,0,160,127,C.wall);
+  for(let x=4;x<58;x+=9) px(x,0,1,104,C.wall2);
+  // window
+  px(9,11,40,34,C.K);
+  const sk=(G&&G.L&&G.L.sky)||[C.sky1,C.sky2,C.sky3,C.sun];
+  px(10,12,38,11,sk[0]); px(10,23,38,10,sk[1]); px(10,33,38,11,sk[2]);
+  px(34,30,8,3,sk[3]); px(35,29,6,1,sk[3]); px(35,33,6,1,sk[3]);
+  px(14,18,6,1,'#f6e7ff'); px(40,15,1,1,'#f6e7ff'); px(19,26,1,1,'#f6e7ff');
+  px(28,12,2,32,C.frame); px(10,27,38,2,C.frame);
+  px(7,44,44,3,C.frame); px(7,47,44,1,C.K);
+  // wall clock
+  box(20,60,13,13,C.white); px(26,62,1,5,C.K); px(26,66,4,1,C.K); px(19,59,15,1,C.K);
+  // baseboard + far floor
+  px(0,101,58,4,C.base);
+  px(0,105,160,22,C.floor);
+  for(let y=110;y<127;y+=6) px(0,y,160,1,C.floorD);
+  // upper cabinets
+  px(62,9,94,30,C.K); px(63,10,92,28,C.cab);
+  px(93,10,1,28,C.K); px(124,10,1,28,C.K);
+  px(89,22,2,4,C.knob); px(96,22,2,4,C.knob); px(127,22,2,4,C.knob);
+  px(63,35,92,3,C.cabD);
+  // tiles
+  px(58,39,102,43,C.tile);
+  for(let x=58;x<160;x+=7) px(x,39,1,43,C.grout);
+  for(let y=45;y<82;y+=7) px(58,y,102,1,C.grout);
+  // counter
+  px(56,80,104,1,C.K); px(56,81,104,4,C.ctop); px(56,85,104,1,C.ctopD); px(56,86,104,1,C.K);
+  px(58,87,102,18,C.cab2); px(58,104,102,1,C.K);
+  px(90,87,1,17,C.K); px(124,87,1,17,C.K);
+  px(84,91,3,2,C.knob); px(94,91,3,2,C.knob); px(127,91,3,2,C.knob);
+  // pot + stove
+  px(130,79,22,2,C.K);
+  box(133,71,14,8,'#8f9aa6'); px(134,72,12,1,'#c4ccd5'); px(130,73,3,2,C.K); px(147,73,3,2,C.K);
+  // cutting board w/ carrot
+  box(64,77,16,3,'#d9b17a'); px(67,76,7,1,'#ef8a3a'); px(74,76,2,1,C.green);
+  // lamp
+  px(104,0,1,4,C.K); box(100,4,9,3,C.yellow);
+}
+function drawSteam(g){
+  for(const s of g.steam){ px(Math.round(s.x),Math.round(s.y),2,2,C.steam); }
+}
+
+/* ---------- table ---------- */
+function drawTable(){
+  px(0,127,160,1,C.K);
+  px(0,128,160,26,C.tTop);
+  px(0,136,160,1,C.tLine); px(0,145,160,1,C.tLine);
+  px(38,128,1,8,C.tLine); px(102,137,1,8,C.tLine); px(64,146,1,8,C.tLine); px(130,128,1,8,C.tLine);
+  px(0,153,160,1,C.tHi);
+  px(0,154,160,6,C.tApron); px(0,160,160,1,C.K);
+  px(0,161,160,36,'#3a2b36');
+  // legs
+  box(7,161,6,36,C.tLeg); box(147,161,6,36,C.tLeg);
+  // floor
+  px(0,197,160,23,C.floor2);
+  for(let x=0;x<160;x+=20) px(x,197,1,23,C.floor2D);
+  px(0,208,160,1,C.floor2D);
+  px(5,197,150,2,C.shadow);
+}
+
+/* ---------- items ---------- */
+function drawItem(it, x, by){
+  x=Math.round(x); by=Math.round(by);
+  switch(it.t){
+    case 'cup':
+      box(x-4,by-8,8,8,C.white); px(x-3,by-8,6,1,C.coffee); px(x-3,by-5,6,1,C.red); px(x-3,by-7,1,3,'#ffffff');
+      px(x+4,by-7,2,1,C.K); px(x+6,by-6,1,3,C.K); px(x+4,by-3,2,1,C.K); px(x+4,by-6,2,3,C.white);
+      break;
+    case 'phone':
+      box(x-3,by-10,6,10,C.phone); px(x-2,by-9,4,7,C.screen); px(x-1,by-7,2,2,C.white); px(x-1,by-1,2,1,'#5b667d');
+      break;
+    case 'vase':
+      px(x-1,by-18,1,6,C.green); px(x+1,by-17,1,5,C.green); px(x+2,by-15,2,1,C.green);
+      box(x-3,by-21,3,3,C.pink); box(x+1,by-19,3,3,C.yellow);
+      box(x-2,by-13,4,4,C.blue); box(x-4,by-9,8,9,C.blue);
+      px(x-3,by-6,6,1,C.blueL); px(x-3,by-8,1,3,'#7fb0e6');
+      break;
+    case 'plant':
+      box(x-6,by-14,5,4,C.green); box(x+1,by-15,5,5,C.green); box(x-2,by-19,4,7,C.green2);
+      px(x-1,by-18,1,4,'#a6d986');
+      box(x-6,by-9,12,2,C.terraL); box(x-5,by-7,10,7,C.terra); px(x-4,by-5,1,3,C.terraL);
+      break;
+    case 'clock': {
+      const sh = it.ring>0 ? (Math.floor(it.ring*30)%2?1:-1) : 0;
+      x+=sh;
+      px(x-4,by-1,2,1,C.K); px(x+3,by-1,2,1,C.K);
+      box(x-5,by-13,3,2,C.gold); box(x+3,by-13,3,2,C.gold); px(x,by-13,1,2,C.K);
+      box(x-4,by-10,9,9,C.red); px(x-3,by-9,7,7,C.white); px(x,by-8,1,3,C.K); px(x,by-5,2,1,C.K);
+      if(it.ring>0){ px(x-8,by-11,2,1,C.K); px(x+7,by-11,2,1,C.K); px(x-8,by-7,2,1,C.K); px(x+7,by-7,2,1,C.K); }
+      break; }
+  }
+}
+function markerTop(it){ return Math.round(it.y)-TOP[it.t]-9; }
+function drawDebris(it){
+  const x=Math.round(it.x), by=FLOOR_Y;
+  for(const d of it.debris) px(x+d[0],by+d[1],d[2],d[3],d[4]);
+  if(it.t==='phone'){ box(x-5,by-2,10,2,C.phone); px(x-4,by-2,8,1,C.screen); px(x,by-2,1,1,C.K); px(x+2,by-1,1,1,C.K); }
+  if(it.t==='clock'){ drawItem(it,x,by); }
+}
+function makeDebris(it){
+  const T=ITEMS[it.t], d=[];
+  const n = it.t==='phone'?0 : it.t==='clock'?0 : 7;
+  if(it.t==='cup') d.push([-7,-1,13,2,C.coffee]);
+  if(it.t==='vase'){ d.push([-8,-1,16,2,C.water]); d.push([4,-3,1,3,C.green]); d.push([3,-4,3,2,C.pink]); }
+  if(it.t==='plant'){ d.push([-6,-3,12,3,C.dirt]); d.push([-4,-4,7,1,C.dirt]); d.push([2,-6,4,3,C.green]); d.push([-7,-5,3,3,C.green2]); }
+  for(let i=0;i<n;i++){
+    const c=T.cols[i%T.cols.length];
+    d.push([Math.round(rand(-9,8)),Math.round(rand(-3,0)),Math.random()<.5?2:1,Math.random()<.5?2:1,c]);
+  }
+  return d;
+}
+
+/* ---------- cat ---------- */
+function drawCat(cat, ownerAlert){
+  const ox=Math.round(cat.x), f=cat.f, m=cat.mode, t=cat.anim;
+  let by=CATY;
+  if(m==='caught') by-= (Math.floor(t*6)%2)+1;
+  const parts=[], det=[];
+  const P=(lx,ly,w,h,c)=>parts.push([lx,ly,w,h,c]);
+  const D=(lx,ly,w,h,c)=>det.push([lx,ly,w,h,c]);
+  let hx, hy;
+  if(m==='sit'){
+    P(-11,-3,7,2,C.cat); D(-11,-3,2,2,C.catD);
+    P(-5,-10,10,8,C.cat);
+    P(2,-4,2,4,C.cat); P(5,-4,2,4,C.cat);
+    hx=CAT_HEAD_X.sit; hy=-16;
+    D(-4,-10,1,3,C.catD); D(-1,-10,1,3,C.catD);
+    D(4,-9,3,4,C.catW);
+  } else {
+    const wv = m==='walk' ? 0 : (Math.sin(t*3)>0?-1:0);
+    P(-10,-10,3,2,C.cat); P(-12+wv,-16,2,7,C.cat);
+    D(-12+wv,-16,2,2,C.catD);
+    P(-8,-9,13,6,C.cat);
+    const step = m==='walk' ? (Math.floor(t*9)%2) : 0;
+    const lifted=(k)=> m==='walk' && (k%2)===step;
+    [-7,-4,0,3].forEach((lx,k)=>{
+      if(m==='push' && k===3) return;
+      P(lx,-3,2,lifted(k)?2:3,C.cat);
+    });
+    if(m==='push'){
+      const tap = (cat.tapT||0)>0.075; // in step with the tap sound
+      const reach=CAT_FRONT+Math.max(-2,Math.round(cat.gap||0)); // paw tip lands on the item's edge
+      const tip = tap ? reach : reach-3;
+      P(6,-6,Math.max(2,tip-6),2,C.cat); D(tip-1,-6,1,2,C.catW);
+    }
+    D(-5,-9,1,3,C.catD); D(-2,-9,1,3,C.catD); D(1,-9,1,2,C.catD);
+    D(4,-8,2,3,C.catW);
+    hx=CAT_HEAD_X[m]||3; hy=-15;
+    if(m==='push') hy+=1;
+  }
+  P(hx,hy,9,7,C.cat); P(hx,hy-2,3,2,C.cat); P(hx+6,hy-2,3,2,C.cat);
+  D(hx+1,hy-1,1,1,C.pink); D(hx+7,hy-1,1,1,C.pink);
+  D(hx+4,hy,1,2,C.catD);
+  D(hx+3,hy+5,3,1,C.catW);
+  // face
+  if(m==='caught'){
+    D(hx+1,hy+1,3,3,C.white); D(hx+2,hy+2,1,1,C.K);
+    D(hx+5,hy+1,3,3,C.white); D(hx+6,hy+2,1,1,C.K);
+    D(hx+4,hy+5,1,1,C.K);
+  } else if(m==='sit' && ownerAlert){
+    D(hx+1,hy+3,1,1,C.K); D(hx+2,hy+2,1,1,C.K); D(hx+3,hy+3,1,1,C.K);
+    D(hx+5,hy+3,1,1,C.K); D(hx+6,hy+2,1,1,C.K); D(hx+7,hy+3,1,1,C.K);
+    D(hx,hy+4,1,1,C.pink); D(hx+8,hy+4,1,1,C.pink);
+    D(hx+4,hy+4,1,1,C.pink);
+  } else if(m==='push'){
+    D(hx+2,hy+3,1,1,C.K); D(hx+6,hy+3,1,1,C.K); D(hx+1,hy+2,2,1,C.catD); D(hx+6,hy+2,2,1,C.catD);
+    D(hx+4,hy+4,1,1,C.pink);
+  } else {
+    const blink = (t%3.2)>3.05;
+    D(hx+2,hy+(blink?3:2),1,blink?1:2,C.K); D(hx+6,hy+(blink?3:2),1,blink?1:2,C.K);
+    D(hx+4,hy+4,1,1,C.pink);
+  }
+  const X=(lx,w)=> f>0 ? ox+lx : ox-lx-w;
+  for(const p of parts) px(X(p[0]-1,p[2]+2),by+p[1]-1,p[2]+2,p[3]+2,C.K);
+  for(const p of parts) px(X(p[0],p[2]),by+p[1],p[2],p[3],p[4]);
+  for(const p of det)   px(X(p[0],p[2]),by+p[1],p[2],p[3],p[4]);
+}
+
+/* ---------- owner ---------- */
+function drawOwner(o, catSitting){
+  const ox=104, by=121, st=o.st, a=o.anim;
+  const front = st==='look'||st==='caught'||st==='dinner';
+  // legs + shoes
+  box(-5+ox,by-16,4,14,C.pants); box(1+ox,by-16,4,14,C.pants);
+  box(-6+ox,by-3,5,3,C.shoe); box(1+ox,by-3,5,3,C.shoe);
+  // arms (behind torso outline)
+  if(front){
+    if(st==='caught'){ box(ox-11,by-30,4,9,C.shirt); box(ox+7,by-30,4,9,C.shirt); px(ox-10,by-22,3,2,C.skin); px(ox+7,by-22,3,2,C.skin); }
+    else { box(ox-10,by-31,3,12,C.shirt); box(ox+7,by-31,3,12,C.shirt); px(ox-10,by-20,3,2,C.skin); px(ox+7,by-20,3,2,C.skin); }
+  } else {
+    const stir = st==='back' ? Math.round(Math.sin(a*7)) : 0;
+    box(ox-10,by-31,3,9,C.shirt); box(ox+7,by-31+stir,3,9,C.shirt);
+  }
+  // torso
+  box(ox-7,by-32,14,17,C.shirt); px(ox-7,by-17,14,2,C.shirtD);
+  if(front){
+    px(ox-5,by-29,10,14,C.apron); px(ox-3,by-23,6,3,C.apronD); px(ox-5,by-32,1,3,C.apron); px(ox+4,by-32,1,3,C.apron);
+  } else {
+    px(ox-7,by-20,14,1,C.apron); px(ox-3,by-21,2,3,C.apron); px(ox+1,by-21,2,3,C.apron);
+    px(ox-5,by-32,1,12,C.apronD); px(ox+4,by-32,1,12,C.apronD);
+  }
+  px(ox-2,by-34,4,2,C.skin);
+  // head
+  let hx=ox, jit=0;
+  if(st==='tell'){ jit = (a%0.5)<0.12 ? -1 : 0; hx+=1; }
+  box(hx-3,by-49+jit,6,4,C.hair);
+  box(hx-6,by-45+jit,12,11,C.hair);
+  if(front){
+    px(hx-5,by-42,10,8,C.skin); px(hx-5,by-43,10,2,C.hair); px(hx-5,by-41,1,2,C.hair); px(hx+4,by-41,1,2,C.hair);
+    if(st==='caught'){
+      px(hx-4,by-40,2,1,C.K); px(hx-3,by-39,1,1,C.K); px(hx+2,by-40,2,1,C.K); px(hx+2,by-39,1,1,C.K);
+      px(hx-3,by-38,1,2,C.K); px(hx+2,by-38,1,2,C.K);
+      px(hx-1,by-36,2,2,'#7a2a2a');
+    } else if(st==='dinner' || catSitting){
+      px(hx-4,by-38,1,1,C.K); px(hx-3,by-39,1,1,C.K); px(hx-2,by-38,1,1,C.K);
+      px(hx+1,by-38,1,1,C.K); px(hx+2,by-39,1,1,C.K); px(hx+3,by-38,1,1,C.K);
+      px(hx-1,by-36,2,1,'#b0504a'); px(hx-5,by-37,1,1,'#f0a0a0'); px(hx+4,by-37,1,1,'#f0a0a0');
+    } else {
+      px(hx-3,by-39,1,2,C.K); px(hx+2,by-39,1,2,C.K); px(hx-1,by-36,2,1,'#b0504a');
+    }
+  } else if(st==='turn'||st==='unturn'){
+    px(hx,by-42+jit,5,7,C.skin); px(hx+3,by-39+jit,1,1,C.K); px(hx,by-43+jit,5,1,C.hair);
+  } else if(st==='tell'){
+    px(hx+4,by-40+jit,2,5,C.skin); px(hx+5,by-39+jit,1,2,C.skinD);
+  } else {
+    px(hx-4,by-43,3,1,C.hair2); px(hx+1,by-41,2,1,C.hair2);
+  }
+  // bubble
+  const bx=ox+7, byy=by-62;
+  if(st==='tell') bubble(bx,byy+jit,'?',C.K);
+  else if(st==='caught') bubble(bx,byy,'!',C.red);
+  else if(st==='look' && catSitting) bubble(bx,byy,'h',C.red);
+  else if(st==='look') bubble(bx,byy,'?',C.red);
+  else if(o.msgT>0) bubble(bx,byy,'.',C.K);
+}
+
+/* ---------- audio ---------- */
+let AC=null, soundOn=false;
+function ensureAC(){
+  if(!soundOn) return;
+  try{ if(!AC) AC=new (window.AudioContext||window.webkitAudioContext)(); if(AC.state==='suspended') AC.resume(); }catch(e){AC=null}
+}
+function tone(freq,dur,type,vol,slide,delay){
+  if(!AC) return;
+  const t0=AC.currentTime+(delay||0);
+  const o=AC.createOscillator(), g=AC.createGain();
+  o.type=type||'square'; o.frequency.setValueAtTime(freq,t0);
+  if(slide) o.frequency.exponentialRampToValueAtTime(Math.max(30,freq*slide),t0+dur);
+  g.gain.setValueAtTime(vol||0.06,t0); g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+  o.connect(g).connect(AC.destination); o.start(t0); o.stop(t0+dur+0.02);
+}
+function noise(dur,vol,hp){
+  if(!AC) return;
+  const len=Math.floor(AC.sampleRate*dur), buf=AC.createBuffer(1,len,AC.sampleRate), d=buf.getChannelData(0);
+  for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,2);
+  const s=AC.createBufferSource(), g=AC.createGain(), fl=AC.createBiquadFilter();
+  fl.type='highpass'; fl.frequency.value=hp||800; s.buffer=buf; g.gain.value=vol||0.2;
+  s.connect(fl).connect(g).connect(AC.destination); s.start();
+}
+function sfx(n){
+  if(!soundOn||!AC) return;
+  try{
+    switch(n){
+      case 'tap': tone(520+Math.random()*80,0.04,'square',0.025); break;
+      case 'crash': noise(0.35,0.28,1800); tone(900,0.15,'triangle',0.05,0.5); break;
+      case 'thud': noise(0.2,0.25,200); tone(140,0.15,'sine',0.12,0.5); break;
+      case 'ring': noise(0.2,0.2,1500); for(let i=0;i<8;i++) tone(i%2?1320:1180,0.07,'square',0.03,1,i*0.08); break;
+      case 'huh': tone(440,0.09,'square',0.04,1.5); break;
+      case 'caught': tone(520,0.12,'square',0.06,1,0); tone(390,0.12,'square',0.06,1,0.13); tone(260,0.3,'square',0.06,0.7,0.26); break;
+      case 'win': [523,659,784,1046].forEach((f,i)=>tone(f,0.14,'square',0.05,1,i*0.1)); break;
+      case 'click': tone(660,0.05,'square',0.03); break;
+    }
+  }catch(e){}
+}
+
+/* ---------- game state ---------- */
+let G=null, mode='title';
+const keys={left:false,right:false,push:false};
+
+function makeLevel(i){
+  const L=LEVELS[i], n=L.items.length;
+  const items=L.items.map((t,k)=>({t, x:Math.round(n===1?96:40+k*(108/(n-1))), p:0, st:'rest', y:REST, vy:0, vx:0, wob:0, ring:0, debris:null}));
+  return {i, L, items, time:L.time, susp:0, phase:'play', endT:0, shown:false, elapsed:0, shake:0,
+    parts:[], pops:[], steam:[], steamT:0,
+    cat:{x:14,f:1,mode:'sit',anim:0,target:null,tapT:0},
+    owner:{st:'back', t:rand(L.back[0],L.back[1])*0.6+0.8, anim:0, fake:false, startle:false, msgT:0},
+    reason:null};
+}
+
+// An item is pushable from where the cat already stands: its near edge must sit
+// just past the cat's nose on one side. The cat never moves to reach it.
+function gapTo(c,it,f){ return f*((it.x-f*HALF[it.t])-(c.x+f*CAT_FRONT)); }
+function findTarget(c){
+  let best=null, bd=1e9;
+  for(const it of G.items){
+    if(it.st!=='rest') continue;
+    for(const f of [c.f,-c.f]){
+      const gap=gapTo(c,it,f);
+      if(gap<GAP_MIN||gap>GAP_MAX) continue;
+      const score=Math.abs(gap-2)+(f===c.f?0:3);
+      if(score<bd){bd=score;best={it,f,gap};}
+    }
+  }
+  return best;
+}
+
+function updateOwner(dt){
+  const o=G.owner, L=G.L;
+  o.msgT=Math.max(0,o.msgT-dt);
+  o.t-=dt;
+  if(o.t>0) return;
+  switch(o.st){
+    case 'back':
+      o.st='tell'; o.t=L.tell; o.fake = !o.startle && Math.random()<L.fake; o.startle=false; sfx('huh'); break;
+    case 'tell':
+      if(o.fake){ o.st='back'; o.t=rand(L.back[0],L.back[1])*0.7; o.msgT=0.9; }
+      else { o.st='turn'; o.t=0.2; }
+      break;
+    case 'turn': o.st='look'; o.t=L.look; break;
+    case 'look': o.st='unturn'; o.t=0.2; break;
+    case 'unturn': o.st='back'; o.t=rand(L.back[0],L.back[1]); break;
+  }
+}
+
+function land(it){
+  const g=G, T=ITEMS[it.t];
+  it.st='broken'; it.y=FLOOR_Y; it.debris=makeDebris(it);
+  if(it.t==='clock') it.ring=1.6;
+  sfx(T.sfx); buzz(15);
+  for(let i=0;i<6;i++) g.parts.push({x:it.x+rand(-6,6),y:FLOOR_Y-1,vx:rand(-20,20),vy:rand(-25,-8),life:rand(0.3,0.5),c:'#e9dfd0'});
+  g.shake = REDUCED?0:0.18;
+  for(let i=0;i<12;i++) g.parts.push({x:it.x+rand(-3,3),y:FLOOR_Y-3,vx:rand(-45,45),vy:rand(-80,-25),life:rand(0.4,0.8),c:T.cols[i%T.cols.length]});
+  g.pops.push({text:T.pop,x:it.x,y:FLOOR_Y-16,t:0});
+  if(g.phase==='play'){
+    g.susp+=T.noise;
+    if(T.noise>=16 && g.owner.st==='back'){ g.owner.t=Math.min(g.owner.t,0.45); g.owner.startle=true; }
+  }
+}
+
+function physics(dt){
+  for(const it of G.items){
+    if(it.st==='fall'){
+      it.vy+=GRAV*dt; it.y+=it.vy*dt; it.x+=it.vx*dt;
+      if(it.y>=FLOOR_Y) land(it);
+    }
+    if(it.ring>0) it.ring=Math.max(0,it.ring-dt);
+  }
+}
+
+function fx(dt){
+  const g=G;
+  g.shake=Math.max(0,g.shake-dt);
+  for(const p of g.parts){ p.vy+=380*dt; p.x+=p.vx*dt; p.y+=p.vy*dt; if(p.y>FLOOR_Y+6){p.y=FLOOR_Y+6;p.vy*=-0.3;p.vx*=0.6;} p.life-=dt; }
+  g.parts=g.parts.filter(p=>p.life>0);
+  for(const p of g.pops) p.t+=dt;
+  g.pops=g.pops.filter(p=>p.t<0.9);
+  g.steamT-=dt;
+  if(g.steamT<=0){ g.steamT=0.35; g.steam.push({x:136+rand(0,8),y:69,life:1.6}); }
+  for(const s of g.steam){ s.y-=9*dt; s.x+=Math.sin(s.y*0.3)*4*dt; s.life-=dt; }
+  g.steam=g.steam.filter(s=>s.life>0);
+}
+
+function lose(reason){
+  const g=G;
+  g.phase='lost'; g.reason=reason; g.endT=1.4; g.shown=false;
+  g.owner.st = reason==='time' ? 'dinner' : 'caught';
+  g.cat.mode = reason==='time' ? 'sit' : 'caught';
+  if(reason==='time') g.pops.push({text:'开饭啦！',x:104,y:60,t:0});
+  sfx(reason==='time'?'huh':'caught');
+  if(reason!=='time') buzz([60,40,140]);
+}
+function win(){
+  const g=G;
+  g.phase='won'; g.endT=1.1; g.shown=false;
+  const prev=SAVE.best[g.i];
+  g.newBest = !prev || g.elapsed<prev;
+  if(g.newBest) SAVE.best[g.i]=Math.round(g.elapsed*10)/10;
+  g.stars=starsFor(g.L,g.elapsed);
+  SAVE.stars=SAVE.stars||{}; SAVE.stars[g.i]=Math.max(SAVE.stars[g.i]||0,g.stars);
+  SAVE.unlocked=Math.max(SAVE.unlocked,Math.min(LEVELS.length,g.i+2));
+  persist();
+  sfx('win');
+}
+
+function update(dt){
+  const g=G, c=g.cat, o=g.owner;
+  c.anim+=dt; o.anim+=dt;
+  fx(dt);
+  if(g.phase!=='play'){
+    physics(dt);
+    g.endT-=dt;
+    if(g.endT<=0 && !g.shown){ g.shown=true; if(g.phase==='won') showWin(); else showLose(); }
+    return;
+  }
+  g.elapsed+=dt; g.time-=dt;
+  if(g.time<=0){ g.time=0; lose('time'); return; }
+
+  // keep the same item locked while the button stays held
+  const locked = keys.push && c.mode==='push' && c.target && c.target.st==='rest';
+  if(!locked){ const tg=findTarget(c); c.target=tg?tg.it:null; c.tf=tg?tg.f:c.f; c.gap=tg?tg.gap:0; }
+  if(keys.push){
+    if(c.target){
+      const it=c.target;
+      c.f=c.tf; c.mode='push';
+      it.p=Math.min(1,it.p+dt/ITEMS[it.t].push); it.wob+=dt;
+      c.tapT-=dt; if(c.tapT<=0){c.tapT=0.15; sfx('tap');}
+      it.y=REST+it.p*(EDGE-REST);
+      if(it.p>=1){ it.st='fall'; it.y=EDGE; it.vy=-30; it.vx=rand(-6,6); c.target=null; }
+    } else c.mode='swat';
+  } else if(keys.left!==keys.right){
+    const d=keys.right?1:-1; c.f=d; c.mode='walk'; c.x=clamp(c.x+d*CAT_SPEED*dt,10,150);
+  } else c.mode='sit';
+
+  updateOwner(dt);
+
+  if(o.st==='look'){
+    if(c.mode==='push'){ lose('push'); return; }
+    if(g.items.some(it=>it.st==='fall')){ lose('fall'); return; }
+    if(c.mode==='walk'||c.mode==='swat') g.susp+=SUSP_WALK*dt;
+  } else g.susp=Math.max(0,g.susp-SUSP_DECAY*dt);
+
+  physics(dt);
+  if(g.susp>=100){ g.susp=100; lose('susp'); return; }
+  if(g.items.every(it=>it.st==='broken')) win();
+}
+
+/* idle animation for title / intro / pause backdrop */
+function idle(dt){
+  if(!G) return;
+  G.cat.anim+=dt; if(mode!=='paused') G.owner.anim+=dt;
+  if(mode!=='paused') fx(dt);
+}
+
+/* ---------- draw ---------- */
+function draw(){
+  if(!G) return;
+  const g=G;
+  ctx.fillStyle=C.K; ctx.fillRect(0,0,cv.width,cv.height);
+  OX = g.shake>0 ? Math.round(rand(-1,1)) : 0; OY = g.shake>0 ? Math.round(rand(-1,1)) : 0;
+  drawRoom();
+  drawSteam(g);
+  const alert = g.owner.st!=='back';
+  drawOwner(g.owner, g.cat.mode==='sit');
+  drawTable();
+  for(const it of g.items) if(it.st==='broken') drawDebris(it);
+  const list=[];
+  for(const it of g.items) if(it.st==='rest') list.push({y:it.y,draw:()=>{
+    const wob = (g.cat.target===it && g.cat.mode==='push') ? (Math.floor(it.wob*14)%2) : 0;
+    const teeter = it.p>0.8 ? (Math.floor(g.cat.anim*12)%2) : 0; // about to go over
+    drawItem(it,it.x+wob*(g.cat.f)+teeter*(it.p>0.9?1:0),it.y+teeter);
+  }});
+  list.push({y:CATY,draw:()=>drawCat(g.cat,alert)});
+  list.sort((a,b)=>a.y-b.y).forEach(d=>d.draw());
+  for(const it of g.items) if(it.st==='fall') drawItem(it,it.x,it.y);
+  // target marker
+  if(mode==='play' && g.phase==='play'){
+    const t=g.cat.target;
+    if(t && g.cat.mode!=='push'){
+      const bob=(Math.floor(g.cat.anim*4)%2);
+      const top=markerTop(t)-bob;
+      px(t.x-4,top-1,9,1,C.K); px(t.x-4,top,9,1,C.white); px(t.x-3,top+1,7,1,C.white); px(t.x-2,top+2,5,1,C.white); px(t.x-1,top+3,3,1,C.white); px(t.x,top+4,1,1,C.white);
+      px(t.x-5,top,1,1,C.K); px(t.x+5,top,1,1,C.K); px(t.x-4,top+1,1,1,C.K); px(t.x+4,top+1,1,1,C.K); px(t.x-3,top+2,1,1,C.K); px(t.x+3,top+2,1,1,C.K); px(t.x-2,top+3,1,1,C.K); px(t.x+2,top+3,1,1,C.K); px(t.x-1,top+4,1,1,C.K); px(t.x+1,top+4,1,1,C.K); px(t.x,top+5,1,1,C.K);
+    }
+    // push progress
+    if(t && g.cat.mode==='push'){
+      px(t.x-7,t.y+3,14,3,C.K); px(t.x-6,t.y+4,Math.round(12*t.p),1,C.yellow);
+    }
+  }
+  for(const p of g.parts) px(Math.round(p.x),Math.round(p.y),2,2,p.c);
+  OX=0; OY=0;
+  // danger frame: blinking amber while the owner twitches, solid red while looking
+  if(mode==='play' && g.phase==='play'){
+    const st=g.owner.st;
+    const col = st==='tell' ? ((Math.floor(g.owner.anim*8)%2)?DANGER.warn:null) : (st==='turn'||st==='look') ? DANGER.look : null;
+    if(col){ px(0,0,W,2,col); px(0,H-2,W,2,col); px(0,0,2,H,col); px(W-2,0,2,H,col); }
+  }
+  // pops
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.font=Math.round(9*K)+'px "ZCOOL KuaiLe","PingFang SC",sans-serif';
+  ctx.lineJoin='round';
+  for(const p of g.pops){
+    const y=(p.y-p.t*14)*K, x=clamp(p.x,22,138)*K;
+    ctx.globalAlpha=Math.min(1,(0.9-p.t)*3);
+    ctx.lineWidth=Math.max(2,K*1.2); ctx.strokeStyle=C.K; ctx.strokeText(p.text,x,y);
+    ctx.fillStyle=C.yellow; ctx.fillText(p.text,x,y);
+    ctx.globalAlpha=1;
+  }
+}
+
+/* ---------- HUD ---------- */
+const hud=$('hud'), ctr=$('controls');
+const elTimer=$('timer'), elLeft=$('left'), elSusp=$('susp'), elName=$('lvName');
+let lastHud='';
+const elHint=$('hint'), elPush=$('kP');
+let lastHint='';
+function hintFor(g){
+  if(mode!=='play' || g.phase!=='play') return ['',''];
+  const st=g.owner.st, c=g.cat, early=g.i<2;
+  if(st==='tell') return c.mode==='push' ? ['松手！主人要回头了','warn'] : ['主人要回头了，别动','warn'];
+  if(st==='turn'||st==='look') return c.mode==='sit' ? ['装乖中…','calm'] : ['别乱动！怀疑在涨','look'];
+  if(c.mode==='push') return early ? ['推推推…',''] : ['',''];
+  if(c.target) return ['按住「推」',''];
+  if(early && g.elapsed<6) return ['走到东西旁边',''];
+  return ['',''];
+}
+function updateHint(){
+  if(!G) return;
+  const [txt,cls]=hintFor(G);
+  const key=txt+'|'+cls;
+  if(key!==lastHint){ lastHint=key; elHint.textContent=txt; elHint.className=cls; elHint.hidden=!txt; }
+  const watch=['tell','turn','look'].includes(G.owner.st);
+  elPush.classList.toggle('ready', mode==='play' && G.phase==='play' && !!G.cat.target && G.cat.mode!=='push' && !watch);
+  elPush.classList.toggle('active', mode==='play' && G.phase==='play' && G.cat.mode==='push');
+}
+function updateHud(){
+  updateHint();
+  if(!G) return;
+  const left=G.items.filter(it=>it.st!=='broken').length;
+  const s=Math.round(G.susp);
+  const tm=Math.ceil(G.time);
+  const key=tm+'|'+left+'|'+s;
+  if(key===lastHud) return; lastHud=key;
+  elTimer.textContent=tm+' 秒';
+  elTimer.style.color = tm<=10 ? 'var(--danger)' : '';
+  elLeft.textContent='还剩 '+left+' 件';
+  elSusp.style.width=s+'%';
+  elSusp.classList.toggle('hot',s>=60);
+}
+
+/* ---------- screens ---------- */
+const ov=$('ov');
+const SCR=['scrTitle','scrIntro','scrPause','scrWin','scrLose'];
+function show(id){
+  SCR.forEach(s=>$(s).hidden = s!==id);
+  ov.hidden=!id;
+  const playing = !id;
+  if(playing) hud.removeAttribute('data-off');
+  if(playing) ctr.removeAttribute('data-off'); else ctr.setAttribute('data-off','');
+  if(id==='scrTitle') hud.setAttribute('data-off',''); else hud.removeAttribute('data-off');
+  if(id){ const b=$(id).querySelector('.pbtn'); if(b && !('ontouchstart' in window)) try{b.focus({preventScroll:true})}catch(e){} }
+}
+function countLabel(L){
+  const m={}; L.items.forEach(t=>m[t]=(m[t]||0)+1);
+  return Object.keys(m).map(t=>ITEMS[t].name+(m[t]>1?' ×'+m[t]:'')).join('、');
+}
+function goTitle(){
+  mode='title'; G=makeLevel(0); clearKeys();
+  const box_=$('lvls'); box_.innerHTML='';
+  const next=Math.min(SAVE.unlocked,LEVELS.length)-1;
+  LEVELS.forEach((L,i)=>{
+    const b=document.createElement('button'); b.type='button';
+    const st=(SAVE.stars&&SAVE.stars[i])||0;
+    b.innerHTML='<span>'+(i+1)+'</span><small>'+(i<SAVE.unlocked?starText(st):'锁')+'</small>';
+    b.setAttribute('aria-label','第 '+(i+1)+' 关 '+L.name+(i<SAVE.unlocked?'':'（未解锁）'));
+    if(i>=SAVE.unlocked) b.disabled=true;
+    if(i===next) b.className='cur';
+    b.addEventListener('click',()=>{sfx('click'); goIntro(i);});
+    box_.appendChild(b);
+  });
+  $('btnPlay').textContent = next>0 ? '继续第 '+(next+1)+' 关' : '开始';
+  $('btnPlay').onclick=()=>{ sfx('click'); goIntro(next); };
+  show('scrTitle');
+}
+function goIntro(i){
+  mode='intro'; G=makeLevel(i); clearKeys(); lastHud='';
+  elName.textContent='第 '+(i+1)+' 关 · '+G.L.name;
+  $('inNum').textContent='第 '+(i+1)+' 关 / 共 '+LEVELS.length+' 关';
+  $('inName').textContent=G.L.name;
+  $('inItems').textContent='要推下去：'+countLabel(G.L)+'。时间 '+G.L.time+' 秒，'+G.L.par[0]+' 秒内三星。';
+  $('inTip').textContent=G.L.tip;
+  updateHud();
+  show('scrIntro');
+}
+function startPlay(){ ensureAC(); mode='play'; show(null); }
+function pause(){ if(mode!=='play'||!G||G.phase!=='play') return; mode='paused'; clearKeys(); show('scrPause'); }
+function resume(){ mode='play'; show(null); }
+function showWin(){
+  mode='end';
+  const i=G.i, last=i===LEVELS.length-1;
+  $('wNum').textContent='第 '+(i+1)+' 关 · '+G.L.name;
+  $('wTitle').textContent= last ? '全部通关！你是全家最会捣乱的猫。' : '桌子干净了！';
+  $('wTime').textContent='用时 '+G.elapsed.toFixed(1)+' 秒';
+  $('wStars').textContent=starText(G.stars); $('wStars').setAttribute('aria-label',G.stars+' 颗星');
+  const need = G.stars<3 ? ('　'+G.L.par[G.stars===2?0:1]+' 秒内拿 '+(G.stars+1)+' 颗星') : '';
+  $('wBest').textContent= (G.newBest ? '新纪录！' : '最佳 '+SAVE.best[i].toFixed(1)+' 秒') + need;
+  $('btnNext').hidden=last;
+  show('scrWin');
+}
+const WHY={
+  push:['被抓个正着！','主人回头的时候，你的爪子还按在东西上。'],
+  fall:['人赃并获！','东西还在往下掉，主人刚好回头。推最后一下要趁早。'],
+  susp:['主人起疑了','动静太大，或者在主人眼皮底下乱走。歇一会儿怀疑值会慢慢降。'],
+  time:['时间到','主人忙完了，桌上还有东西没推完。']
+};
+function showLose(){
+  mode='end';
+  const w=WHY[G.reason]||WHY.push;
+  $('lTitle').textContent= G.reason==='time' ? G.L.done : w[0]; $('lWhy').textContent=w[1];
+  show('scrLose');
+}
+
+/* ---------- input ---------- */
+function clearKeys(){ keys.left=keys.right=keys.push=false; document.querySelectorAll('.hold.on').forEach(b=>b.classList.remove('on')); }
+function bindHold(el,key){
+  const ids=new Set();
+  const on=e=>{ e.preventDefault(); ensureAC(); ids.add(e.pointerId); try{el.setPointerCapture(e.pointerId)}catch(_){} keys[key]=true; el.classList.add('on'); };
+  const off=e=>{ ids.delete(e.pointerId); if(!ids.size){ keys[key]=false; el.classList.remove('on'); } };
+  el.addEventListener('pointerdown',on);
+  el.addEventListener('pointerup',off);
+  el.addEventListener('pointercancel',off);
+  el.addEventListener('lostpointercapture',off);
+  el.addEventListener('contextmenu',e=>e.preventDefault());
+}
+bindHold($('kL'),'left'); bindHold($('kR'),'right'); bindHold($('kP'),'push');
+const KEYMAP={ArrowLeft:'left',KeyA:'left',ArrowRight:'right',KeyD:'right',Space:'push',KeyJ:'push',ArrowDown:'push',KeyS:'push'};
+addEventListener('keydown',e=>{
+  const k=KEYMAP[e.code];
+  if(k && mode==='play'){ e.preventDefault(); keys[k]=true; }
+  if((e.code==='Escape'||e.code==='KeyP') && mode==='play') pause();
+});
+addEventListener('keyup',e=>{ const k=KEYMAP[e.code]; if(k) keys[k]=false; });
+addEventListener('blur',()=>{ clearKeys(); pause(); });
+document.addEventListener('visibilitychange',()=>{ if(document.hidden){ clearKeys(); pause(); } });
+
+$('btnGo').addEventListener('click',()=>{ sfx('click'); startPlay(); });
+$('btnPause').addEventListener('click',()=>{ if(mode==='play') pause(); else if(mode==='paused') resume(); });
+$('btnResume').addEventListener('click',resume);
+$('btnRestartP').addEventListener('click',()=>goIntro(G.i));
+$('btnHomeP').addEventListener('click',goTitle);
+$('btnNext').addEventListener('click',()=>{ sfx('click'); goIntro(Math.min(G.i+1,LEVELS.length-1)); });
+$('btnAgainW').addEventListener('click',()=>goIntro(G.i));
+$('btnHomeW').addEventListener('click',goTitle);
+$('btnAgainL').addEventListener('click',()=>goIntro(G.i));
+$('btnHomeL').addEventListener('click',goTitle);
+const btnSound=$('btnSound');
+function paintSound(){ btnSound.textContent = soundOn ? '声音 开' : '声音 关'; btnSound.setAttribute('aria-pressed',soundOn?'true':'false'); }
+btnSound.addEventListener('click',()=>{ soundOn=!soundOn; ensureAC(); paintSound(); sfx('click'); });
+
+/* ---------- loop ---------- */
+let last=0;
+function loop(now){
+  const dt=Math.min(0.05,Math.max(0,(now-last)/1000||0)); last=now;
+  if(mode==='play') update(dt); else idle(dt);
+  draw(); updateHud();
+  requestAnimationFrame(loop);
+}
+
+function start(data){
+  if(data && data.unlocked){ SAVE.unlocked=Math.max(SAVE.unlocked,data.unlocked); Object.assign(SAVE.best,data.best||{}); SAVE.stars=Object.assign({},data.stars||{},SAVE.stars); }
+  if(data && typeof data.sound==='boolean'){ soundOn=data.sound; }
+  paintSound();
+  resize();
+  try{ new ResizeObserver(resize).observe(stage); }catch(e){ addEventListener('resize',resize); }
+  goTitle();
+  requestAnimationFrame(t=>{last=t;loop(t);});
+}
+try{ window.claude?.hot?.snapshot?.(()=>({unlocked:SAVE.unlocked,best:SAVE.best,stars:SAVE.stars,sound:soundOn})); }catch(e){}
+window.__T={starsFor,hintFor,markerTop,TOP,DANGER,CAT_HEAD_X, findTarget, get G(){return G}, set G(v){G=v}, makeLevel, update, draw, keys, LEVELS, ITEMS, get mode(){return mode}, set mode(v){mode=v}, goTitle, goIntro, startPlay, pause, get SAVE(){return SAVE}};
+if(window.claude?.hot?.ready) window.claude.hot.ready(start); else start(window.claude?.hot?.data ?? {});
+})();
+</script>
